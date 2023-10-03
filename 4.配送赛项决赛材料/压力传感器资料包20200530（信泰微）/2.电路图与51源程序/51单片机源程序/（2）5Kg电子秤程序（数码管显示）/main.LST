@@ -1,0 +1,317 @@
+C51 COMPILER V9.52.0.0   MAIN                                                              01/16/2019 14:55:59 PAGE 1   
+
+
+C51 COMPILER V9.52.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN main.OBJ
+COMPILER INVOKED BY: D:\Keil\C51\BIN\C51.EXE main.c BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          
+   2          #include "main.h"
+   3          #include "HX711.h"
+   4          
+   5          unsigned long HX711_Buffer = 0;
+   6          unsigned long Weight_Maopi = 0;
+   7          long Weight_Shiwu = 0;
+   8          
+   9          unsigned int Temp_Buffer = 0;
+  10          code unsigned char table[] = { 0x3f,0x06,0x5b,0x4f,0x66,0x6d,0x7d,0x07,0x7f,0x6f,0X00,0XFF,0x40};     //0,1,
+             -2,3,4,5,6,7,8,9,全暗，全亮,g,e,r,o,h,l      //共阴
+  11          unsigned char COM1_DATA = 0,COM2_DATA = 0,COM3_DATA = 0,COM4_DATA = 0,COM5_DATA = 0,COM6_DATA = 0;
+  12          unsigned char flag = 0;
+  13          
+  14          unsigned char  timer=0;
+  15          
+  16          bit Flag_ERROR = 0;
+  17          bit Flag_yemian = 0;
+  18          
+  19          sbit beep = P1^7;
+  20            
+  21          sbit P22 = P2^2;
+  22          sbit P23 = P2^3;
+  23          sbit P24 = P2^4;
+  24          sbit P25 = P2^5;
+  25          
+  26          
+  27          unsigned int GapValue= 430;   //校准参数
+  28          unsigned char num1,num2,num3; //num1 和 num2  是存储在单片机eeprom内部的。 num3是刷新变量
+  29          #include "eeprom52.h"
+  30          
+  31          
+  32          
+  33          
+  34          /******************把数据保存到单片机内部eeprom中******************/
+  35          void write_eeprom()
+  36          {
+  37   1          num1=GapValue/256;
+  38   1        num2=GapValue%256;
+  39   1        SectorErase(0x2000);
+  40   1        byte_write(0x2001,  num1);
+  41   1        byte_write(0x2002,  num2);
+  42   1        byte_write(0x2060, a_a);  
+  43   1      }
+  44          
+  45          /******************把数据从单片机内部eeprom中读出来*****************/
+  46          void read_eeprom()
+  47          {
+  48   1        num1   = byte_read(0x2001);
+  49   1        num2   = byte_read(0x2002);
+  50   1        a_a    = byte_read(0x2060);
+  51   1      
+  52   1        GapValue= num1*256+num2;
+  53   1      }
+  54          
+C51 COMPILER V9.52.0.0   MAIN                                                              01/16/2019 14:55:59 PAGE 2   
+
+  55          /**************开机自检eeprom初始化*****************/
+  56          void init_eeprom()
+  57          {
+  58   1        read_eeprom();    //先读
+  59   1        if(a_a != 3)    //新的单片机初始单片机内问eeprom
+  60   1        {
+  61   2          GapValue= 430;
+  62   2          a_a = 3;
+  63   2          write_eeprom();
+  64   2        } 
+  65   1      }
+  66          
+  67          //扫描按键
+  68          void Scan_Key()
+  69          {
+  70   1        if(KEY1 == 0)
+  71   1        {
+  72   2          Delay_ms(5);
+  73   2          if(KEY1 == 0)
+  74   2          {
+  75   3            while(KEY1 == 0);
+  76   3            Get_Maopi();      //去皮
+  77   3          } 
+  78   2        }
+  79   1      
+  80   1        if(KEY2 == 0)
+  81   1        {
+  82   2          Delay_ms(25);
+  83   2          if(KEY2 == 0)
+  84   2          {
+  85   3          //  while(KEY2 == 0);
+  86   3              Flag_yemian=1; num3=0;
+  87   3            
+  88   3              if(GapValue<999)  {   GapValue++; }
+  89   3             write_eeprom();       //保存数据
+  90   3              
+  91   3              COM1_DATA = 12; 
+  92   3              COM2_DATA = GapValue/100;   
+  93   3              COM3_DATA = GapValue%100/10;    
+  94   3              COM4_DATA = GapValue%10;
+  95   3          } 
+  96   2        }
+  97   1      
+  98   1        if(KEY3 == 0)
+  99   1        {
+ 100   2          Delay_ms(25);
+ 101   2          if(KEY3 == 0)
+ 102   2          {  
+ 103   3               Flag_yemian=1; num3=0;
+ 104   3            //while(KEY3 == 0);
+ 105   3              if(GapValue>1)  {   GapValue--; }
+ 106   3             write_eeprom();       //保存数据
+ 107   3      
+ 108   3              COM1_DATA = 12; 
+ 109   3              COM2_DATA = GapValue/100;   
+ 110   3              COM3_DATA = GapValue%100/10;    
+ 111   3              COM4_DATA = GapValue%10;
+ 112   3          } 
+ 113   2        }
+ 114   1      }
+ 115          
+ 116          
+C51 COMPILER V9.52.0.0   MAIN                                                              01/16/2019 14:55:59 PAGE 3   
+
+ 117          
+ 118          //****************************************************
+ 119          //主函数
+ 120          //****************************************************
+ 121          void main()
+ 122          {
+ 123   1        init_eeprom();
+ 124   1        Init_Timer0();
+ 125   1      
+ 126   1        COM1_DATA = 12;       
+ 127   1        COM2_DATA = 12;         
+ 128   1        COM3_DATA = 12;         
+ 129   1        COM4_DATA = 12;         
+ 130   1        Delay_ms(1000);    //延时,等待传感器稳定
+ 131   1        Get_Maopi();        //称毛皮重量
+ 132   1        
+ 133   1        while(1)
+ 134   1        { 
+ 135   2          
+ 136   2          EA = 0;
+ 137   2          Get_Weight();     //称重
+ 138   2          EA = 1;
+ 139   2      
+ 140   2          Scan_Key();
+ 141   2          num3++; 
+ 142   2          if(num3>=10)  {num3=0; Flag_yemian=0; }
+ 143   2          if(Flag_yemian==0)
+ 144   2           {
+ 145   3             //显示当前重量
+ 146   3              if( Flag_ERROR == 1)
+ 147   3               {
+ 148   4                 beep =0;   //蜂鸣器报警
+ 149   4               }
+ 150   3          
+ 151   3              else
+ 152   3              {
+ 153   4                beep =1;
+ 154   4                COM1_DATA = Weight_Shiwu/1000;    
+ 155   4                COM2_DATA = Weight_Shiwu%1000/100;    
+ 156   4                COM3_DATA = Weight_Shiwu%100/10;    
+ 157   4                COM4_DATA = Weight_Shiwu%10;
+ 158   4              
+ 159   4              }
+ 160   3              Delay_ms(100);  
+ 161   3            
+ 162   3            
+ 163   3          }
+ 164   2        }
+ 165   1      }
+ 166          
+ 167          
+ 168          
+ 169          //****************************************************
+ 170          //称重
+ 171          //****************************************************
+ 172          void Get_Weight()
+ 173          {
+ 174   1        Weight_Shiwu = HX711_Read();
+ 175   1        Weight_Shiwu = Weight_Shiwu - Weight_Maopi;   //获取净重
+ 176   1        if(Weight_Shiwu > 0)      
+ 177   1        { 
+ 178   2          Weight_Shiwu = (unsigned int)((float)Weight_Shiwu/GapValue);  //计算实物的实际重量
+C51 COMPILER V9.52.0.0   MAIN                                                              01/16/2019 14:55:59 PAGE 4   
+
+ 179   2                                          
+ 180   2                                          
+ 181   2          if(Weight_Shiwu > 5000)   //超重报警
+ 182   2          {
+ 183   3            Flag_ERROR = 1;
+ 184   3            COM1_DATA = 5;      //
+ 185   3            COM2_DATA = 0;      //
+ 186   3            COM3_DATA = 0;      //
+ 187   3            COM4_DATA = 0;      //
+ 188   3          }
+ 189   2          else
+ 190   2          {
+ 191   3            Flag_ERROR = 0;
+ 192   3          
+ 193   3          }
+ 194   2        }
+ 195   1        else
+ 196   1        {
+ 197   2          Weight_Shiwu = 0;
+ 198   2        //  Flag_ERROR = 1;       //负重报警
+ 199   2        }
+ 200   1        
+ 201   1      }
+ 202          
+ 203          //****************************************************
+ 204          //获取毛皮重量
+ 205          //****************************************************
+ 206          void Get_Maopi()
+ 207          {
+ 208   1        Weight_Maopi = HX711_Read();  
+ 209   1      } 
+ 210          
+ 211          
+ 212          //****************************************************
+ 213          //初始化定时器0
+ 214          //****************************************************
+ 215          void Init_Timer0()
+ 216          {
+ 217   1        TMOD = 0X01;      //T0, 工作模式1
+ 218   1      
+ 219   1        TH0 = (65536 - 1000)/256;
+ 220   1        TL0 = (65536 - 1000)%256;
+ 221   1      
+ 222   1        TR0 = 1;        //开启定时器
+ 223   1        ET0 = 1;          //开启定时器中断
+ 224   1        EA = 1;         //开启总中断    
+ 225   1      }
+ 226          
+ 227          
+ 228          //中断函数
+ 229          //****************************************************
+ 230          void Timer0() interrupt 1
+ 231          {
+ 232   1        TH0 = (65536 - 1000)/256;
+ 233   1        TL0 = (65536 - 1000)%256;
+ 234   1        
+ 235   1        flag++;
+ 236   1        if(flag >= 4)
+ 237   1        {
+ 238   2          flag = 0;
+ 239   2          
+ 240   2        }
+C51 COMPILER V9.52.0.0   MAIN                                                              01/16/2019 14:55:59 PAGE 5   
+
+ 241   1        
+ 242   1      switch(flag)
+ 243   1        { 
+ 244   2          
+ 245   2          case 0:
+ 246   2              P23=P24=P25=1;P22=0;
+ 247   2              SEG_DATA = table[COM1_DATA];  
+ 248   2              break;
+ 249   2      
+ 250   2          case 1:
+ 251   2              P23=0;P22=P24=P25=1;
+ 252   2              SEG_DATA = table[COM2_DATA];    //显示第二位值
+ 253   2              
+ 254   2              break;
+ 255   2      
+ 256   2                      
+ 257   2          case 2:
+ 258   2              P24=0;P22=P23=P25=1;
+ 259   2              SEG_DATA = table[COM3_DATA];    ////显示第三位值
+ 260   2              
+ 261   2              break;
+ 262   2      
+ 263   2      
+ 264   2          case 3:
+ 265   2              P25=0;P22=P23=P24=1;
+ 266   2              SEG_DATA = table[COM4_DATA];        //显示第四位值
+ 267   2              break;
+ 268   2      
+ 269   2        
+ 270   2      
+ 271   2        
+ 272   2        }
+ 273   1      
+ 274   1      
+ 275   1      } 
+ 276          
+ 277          //****************************************************
+ 278          //MS延时函数(12M晶振下测试)
+ 279          //****************************************************
+ 280          void Delay_ms(unsigned int n)
+ 281          {
+ 282   1        unsigned int  i,j;
+ 283   1        for(i=0;i<n;i++)
+ 284   1          for(j=0;j<123;j++);
+ 285   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    924    ----
+   CONSTANT SIZE    =     13    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     28    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      2    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
