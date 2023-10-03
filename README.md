@@ -1,2 +1,1 @@
-# IntelligentTerminalDeliveryRobot
-广东省工科大学生实验综合技能竞赛源代码和相关资料
+# 广东省工科大学生实验综合技能竞赛源代码和相关资料
